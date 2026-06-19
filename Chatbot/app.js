@@ -205,4 +205,97 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
     });
+
+    // Configurar Eventos para el Chat del Bot
+    const chatSendBtn = document.querySelector('.chat-send');
+    const chatInput = document.querySelector('.chat-input');
+    
+    if (chatSendBtn) {
+        chatSendBtn.addEventListener('click', sendChatMessage);
+    }
+    
+    if (chatInput) {
+        chatInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                sendChatMessage();
+            }
+        });
+    }
 });
+
+// Lógica para enviar mensajes y comunicarse con el backend
+async function sendChatMessage() {
+    const chatInput = document.querySelector('.chat-input');
+    const chatContainer = document.querySelector('.chat-container');
+    const messageText = chatInput.value.trim();
+
+    if (!messageText) return;
+
+    // Limpiar input
+    chatInput.value = '';
+
+    // 1. Agregar mensaje del usuario a la pantalla
+    appendChatBubble(messageText, 'user');
+    scrollToBottom(chatContainer);
+
+    // 2. Mostrar indicador de escritura
+    const typingIndicator = showTypingIndicator(chatContainer);
+    scrollToBottom(chatContainer);
+
+    try {
+        // 3. Enviar al backend FastAPI
+        const response = await fetch('http://localhost:8000/api/chat', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ message: messageText })
+        });
+
+        const data = await response.json();
+        
+        // Remover indicador
+        typingIndicator.remove();
+
+        if (response.ok && data.response) {
+            // 4. Agregar respuesta del bot
+            appendChatBubble(data.response, 'bot');
+        } else {
+            appendChatBubble("Lo siento, hubo un problema al obtener la respuesta del bot.", 'bot');
+        }
+    } catch (error) {
+        console.error("Error consultando chatbot backend:", error);
+        typingIndicator.remove();
+        appendChatBubble("Error de conexión con el servidor. ¿Está bot.py encendido?", 'bot');
+    }
+    
+    scrollToBottom(chatContainer);
+}
+
+function appendChatBubble(text, sender) {
+    const chatContainer = document.querySelector('.chat-container');
+    const bubble = document.createElement('div');
+    
+    if (sender === 'user') {
+        bubble.style.cssText = 'background-color: var(--c-primary); color: white; align-self: flex-end; padding: 12px 16px; border-radius: 18px 18px 0 18px; max-width: 80%; font-size: 13px; line-height: 1.4; box-shadow: 0 1px 2px rgba(0,0,0,0.1); margin-top: 8px;';
+    } else {
+        bubble.style.cssText = 'background-color: #FCE4EC; color: var(--c-text-main); align-self: flex-start; padding: 12px 16px; border-radius: 18px 18px 18px 0; max-width: 80%; font-size: 13px; line-height: 1.4; box-shadow: 0 1px 2px rgba(0,0,0,0.1); margin-top: 8px;';
+    }
+    
+    // Reemplazar saltos de línea con <br>
+    bubble.innerHTML = text.replace(/\n/g, '<br>');
+    chatContainer.appendChild(bubble);
+}
+
+function showTypingIndicator(chatContainer) {
+    const indicator = document.createElement('div');
+    indicator.style.cssText = 'background-color: #E0E0E0; color: var(--c-text-main); align-self: flex-start; padding: 12px 16px; border-radius: 18px 18px 18px 0; font-size: 18px; letter-spacing: 2px; margin-top: 8px;';
+    indicator.innerHTML = '<span style="color: #757575;">● ● ●</span>';
+    chatContainer.appendChild(indicator);
+    return indicator;
+}
+
+function scrollToBottom(container) {
+    container.scrollTop = container.scrollHeight;
+}
