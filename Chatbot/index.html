@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>RehabBot</title>
+    <!-- Google Fonts Poppins -->
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,300;0,400;0,500;0,600;1,300&display=swap" rel="stylesheet">
+    <!-- Material Symbols Rounded -->
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@24,400,0,0" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+    <div class="app-container">
+
+        <!-- ==========================================
+             SECCIÓN A: USUARIO NO LOGUEADO
+             ========================================== -->
+
+        <!-- PANTALLA 1: SPLASH / INICIO -->
+        <div id="screen_splash" class="screen active screen-bg-white">
+            <div class="header-curvo" style="height: 45%; display: flex; flex-direction: column; justify-content: center; align-items: center; border-radius: 0 0 40px 40px;">
+                <div style="width: 80px; height: 80px; background: white; border-radius: 50%; border: 3px solid white; display: flex; justify-content: center; align-items: center; margin-bottom: 16px;">
+                    <i class="fa-solid fa-robot" style="font-size: 40px; color: var(--c-primary);"></i>
+                </div>
+                <h1 style="color: white;">Bienvenido/a</h1>
+            </div>
+            
+            <div class="p-24 center-content" style="flex-grow: 1;">
+                <p class="body-text mb-24" style="color: var(--c-text-sec);">Comienza tu proceso de recuperación acompañado en cada paso.</p>
+                <div style="width: 100%; margin-top: auto; margin-bottom: 20px;">
+                    <button class="btn btn-primary mb-16" onclick="navTo('screen_login')">Iniciar Sesión</button>
+                    <button class="btn btn-outline" onclick="navTo('screen_register')">Registrarse</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- PANTALLA 3: INICIAR SESIÓN -->
+        <div id="screen_login" class="screen screen-bg-white">
+            <div class="header-top">
+                <button class="icon-btn" onclick="navTo('screen_splash')"><i class="fa-solid fa-arrow-left"></i></button>
+                <h2>Iniciar Sesión</h2>
+                <div style="width: 24px;"></div>
+            </div>
+            <div class="p-24 flex-1" style="display: flex; flex-direction: column; justify-content: center;">
+                <div class="input-group">
+                    <i class="fa-regular fa-envelope input-icon"></i>
+                    <input type="email" class="input-field" placeholder="Correo electrónico">
+                </div>
+                <div class="input-group">
+                    <i class="fa-solid fa-lock input-icon"></i>
+                    <input type="password" class="input-field" placeholder="Contraseña">
+                    <i class="fa-regular fa-eye input-icon" style="margin-right: 0; cursor: pointer;"></i>
+                </div>
+                <div class="text-center mb-24">
+                    <a class="link" onclick="navTo('screen_change_password_guest')">¿Olvidaste tu contraseña?</a>
+                </div>
+                <button class="btn btn-primary" onclick="navTo('screen_home_logged')">Iniciar Sesión</button>
+                
+                <div class="text-center mt-24">
+                    <span class="body-text">¿No tienes cuenta?</span>
+                    <a class="link" onclick="navTo('screen_register')">Regístrate</a>
+                </div>
+            </div>
+        </div>
+
+        <!-- PANTALLA 4: REGISTRARSE -->
+        <div id="screen_register" class="screen screen-bg-white">
+            <div class="header-top">
+                <button class="icon-btn" onclick="navTo('screen_splash')"><i class="fa-solid fa-arrow-left"></i></button>
+                <h2>Registrarse</h2>
+                <div style="width: 24px;"></div>
+            </div>
+            <div class="p-24 flex-1" style="overflow-y: auto;">
+                <div class="input-group">
+                    <i class="fa-regular fa-user input-icon"></i>
+                    <input type="text" class="input-field" placeholder="Nombre">
+                </div>
+                <div class="input-group">
+                    <i class="fa-regular fa-user input-icon"></i>
+                    <input type="text" class="input-field" placeholder="Apellidos">
+                </div>
+                <div class="input-group">
+                    <i class="fa-regular fa-envelope input-icon"></i>
+                    <input type="email" class="input-field" placeholder="Correo electrónico">
+                </div>
+                <div class="input-group">
+                    <i class="fa-solid fa-lock input-icon"></i>
+                    <input type="password" class="input-field" placeholder="Contraseña">
+                </div>
+                <div class="input-group">
+                    <i class="fa-solid fa-lock input-icon"></i>
+                    <input type="password" class="input-field" placeholder="Confirmar contraseña">
+                </div>
+                
+                <div style="display: flex; align-items: flex-start; gap: 10px; margin-bottom: 24px;">
+                    <input type="checkbox" id="terms" style="margin-top: 4px;">
+                    <label for="terms" class="body-text" style="font-size: 12px;">Acepto los <a class="link" onclick="navTo('screen_terms')">Términos y Condiciones</a></label>
+                </div>
+
+                <button class="btn btn-primary mb-24" onclick="navTo('screen_login')">Crear cuenta</button>
+            </div>
+        </div>
+
+        <!-- PANTALLA 5: CAMBIAR CONTRASEÑA -->
+        <div id="screen_change_password_guest" class="screen screen-bg-white">
+            <div class="header-top">
+                <button class="icon-btn" onclick="navTo('screen_login')"><i class="fa-solid fa-arrow-left"></i></button>
+                <h2>Cambiar Contraseña</h2>
+                <div style="width: 24px;"></div>
+            </div>
+            <div class="p-24 flex-1">
+                <p class="body-text mb-24 text-center">Ingresa tu correo para restablecer tu contraseña.</p>
+                <div class="input-group">
+                    <i class="fa-regular fa-envelope input-icon"></i>
+                    <input type="email" class="input-field" placeholder="Correo electrónico">
+                </div>
+                <button class="btn btn-primary" onclick="navTo('screen_login')">Enviar enlace</button>
+            </div>
+        </div>
+
+        <!-- ==========================================
+             SECCIÓN B: USUARIO LOGUEADO
+             ========================================== -->
+
+        <!-- PANTALLA 7: HOME PRINCIPAL -->
+        <div id="screen_home_logged" class="screen">
+            <div class="header-top" style="border-radius: 0 0 20px 20px; padding-bottom: 30px;">
+                <button class="icon-btn" onclick="openMenu()"><i class="fa-solid fa-bars"></i></button>
+                <h2 style="font-weight: 500;">Hola, Usuario 👋</h2>
+                <div style="width: 44px; height: 44px; background: white; border-radius: 50%; color: var(--c-primary); display: flex; justify-content: center; align-items: center; cursor: pointer;" onclick="navTo('screen_profile')">
+                    <i class="fa-solid fa-user"></i>
+                </div>
+            </div>
+
+            <div class="p-24 flex-1" style="overflow-y: auto; padding-bottom: 100px;">
+                <!-- Mood Tracker -->
+                <div class="text-center mb-24">
+                    <p class="subtitle mb-16">¿Cómo te sientes hoy?</p>
+                    <div style="display: flex; justify-content: center; gap: 15px; font-size: 32px; cursor: pointer;">
+                        <span>😊</span><span>😐</span><span>😔</span><span>😰</span>
+                    </div>
+                </div>
+
+                <!-- Cards -->
+                <div class="card" style="background-color: var(--c-primary); color: white; cursor: pointer;" onclick="navTo('screen_chat')">
+                    <div style="display: flex; align-items: center; gap: 16px;">
+                        <i class="fa-regular fa-comments" style="font-size: 32px;"></i>
+                        <div>
+                            <h2 style="margin-bottom: 4px;">Iniciar Chat</h2>
+                            <p style="font-size: 13px; font-weight: 300;">Habla con RehabBot</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card" style="cursor: pointer; border: 1.5px solid var(--c-border);" onclick="navTo('screen_map_1')">
+                    <div style="display: flex; align-items: center; gap: 16px;">
+                        <i class="fa-solid fa-location-dot" style="font-size: 32px; color: var(--c-primary);"></i>
+                        <div>
+                            <h2 style="color: var(--c-primary); margin-bottom: 4px;">Clínicas Cercanas</h2>
+                            <p class="body-text" style="color: var(--c-text-sec);">Encuentra asistencia médica</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card" style="cursor: pointer; border: 1.5px solid var(--c-border);" onclick="navTo('screen_add_sos_contact')">
+                    <div style="display: flex; align-items: center; gap: 16px;">
+                        <i class="fa-solid fa-phone" style="font-size: 32px; color: var(--c-primary);"></i>
+                        <div>
+                            <h2 style="color: var(--c-primary); margin-bottom: 4px;">Mis Contactos SOS</h2>
+                            <p class="body-text" style="color: var(--c-text-sec);">Gestiona tu red de apoyo</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Botones Inferiores Compartidos -->
+            <nav class="bottom-nav">
+                <div class="nav-item nav-sos" onclick="openSOSModal()">
+                    <i class="fa-solid fa-triangle-exclamation"></i>
+                    <span>SOS</span>
+                </div>
+                <div class="nav-item active" onclick="navTo('screen_home_logged')">
+                    <i class="fa-solid fa-house"></i>
+                    <span>Home</span>
+                </div>
+                <div class="nav-item" onclick="navTo('screen_chat')">
+                    <i class="fa-regular fa-comment"></i>
+                    <span>Chat</span>
+                </div>
+            </nav>
+        </div>
+
+        <!-- PANTALLA 9: PERFIL DE USUARIO -->
+        <div id="screen_profile" class="screen">
+            <div class="header-top">
+                <button class="icon-btn" onclick="navTo('screen_home_logged')"><i class="fa-solid fa-arrow-left"></i></button>
+                <h2>Mi Perfil</h2>
+                <div style="width: 24px;"></div>
+            </div>
+            
+            <div class="p-24 flex-1 center-content" style="justify-content: flex-start;">
+                <div style="width: 90px; height: 90px; background: white; border-radius: 50%; box-shadow: var(--shadow-card); display: flex; justify-content: center; align-items: center; font-size: 40px; color: var(--c-primary); margin-bottom: 16px;">
+                    <i class="fa-solid fa-user"></i>
+                </div>
+                <h2>Name Lastname</h2>
+                <button class="btn btn-outline mt-16" style="width: auto; padding: 8px 24px;" onclick="navTo('screen_edit_profile')">Editar</button>
+
+                <div class="card mt-24" style="width: 100%; text-align: left;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                        <span class="subtitle">Notificaciones</span>
+                        <label class="switch"><input type="checkbox" checked><span class="slider"></span></label>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <span class="subtitle">Llamada directa</span>
+                        <label class="switch"><input type="checkbox" checked><span class="slider"></span></label>
+                    </div>
+                </div>
+
+                <div class="card" style="width: 100%; text-align: left;">
+                    <p class="body-text"><b>Correo:</b> usuario@correo.com</p>
+                    <p class="body-text"><b>Miembro desde:</b> Octubre 2023</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- PANTALLA 10: EDITAR PERFIL -->
+        <div id="screen_edit_profile" class="screen screen-bg-white">
+            <div class="header-top">
+                <button class="icon-btn" onclick="navTo('screen_profile')"><i class="fa-solid fa-arrow-left"></i></button>
+                <h2>Editar Perfil</h2>
+                <div style="width: 24px;"></div>
+            </div>
+            <div class="p-24 flex-1">
+                <div class="input-group">
+                    <i class="fa-regular fa-user input-icon"></i>
+                    <input type="text" class="input-field" value="Name" placeholder="Nombre">
+                </div>
+                <div class="input-group">
+                    <i class="fa-regular fa-user input-icon"></i>
+                    <input type="text" class="input-field" value="Lastname" placeholder="Apellidos">
+                </div>
+                <div class="input-group" style="background-color: #f5f5f5;">
+                    <i class="fa-regular fa-envelope input-icon"></i>
+                    <input type="email" class="input-field" value="usuario@correo.com" disabled>
+                </div>
+                <button class="btn btn-primary mt-24" onclick="navTo('screen_profile')">Guardar Cambios</button>
+            </div>
+        </div>
+
+        <!-- PANTALLA 12: AGREGAR CONTACTO SOS -->
+        <div id="screen_add_sos_contact" class="screen screen-bg-white">
+            <div class="header-top">
+                <button class="icon-btn" onclick="navTo('screen_home_logged')"><i class="fa-solid fa-arrow-left"></i></button>
+                <h2>Agregar Contacto SOS</h2>
+                <div style="width: 24px;"></div>
+            </div>
+            <div class="p-24 flex-1">
+                <div class="input-group">
+                    <i class="fa-regular fa-user input-icon"></i>
+                    <input type="text" class="input-field" placeholder="Nombre del contacto">
+                </div>
+                <div class="input-group">
+                    <i class="fa-solid fa-phone input-icon"></i>
+                    <input type="tel" class="input-field" placeholder="Número de teléfono">
+                </div>
+                <div class="input-group">
+                    <i class="fa-solid fa-users input-icon"></i>
+                    <input type="text" class="input-field" placeholder="Relación (ej. Familiar)">
+                </div>
+                
+                <button class="btn btn-primary mt-16" onclick="navTo('screen_home_logged')">Guardar Contacto</button>
+                <button class="btn btn-outline mt-16">Importar de Contactos</button>
+            </div>
+        </div>
+
+        <!-- PANTALLA 14: TÉRMINOS Y CONDICIONES -->
+        <div id="screen_terms" class="screen screen-bg-white">
+            <div class="header-top">
+                <button class="icon-btn" onclick="navTo('screen_home_logged')"><i class="fa-solid fa-arrow-left"></i></button>
+                <h2>Términos y Condiciones</h2>
+                <div style="width: 24px;"></div>
+            </div>
+            <div class="p-24 flex-1" style="overflow-y: auto;">
+                <p class="body-text" style="text-align: justify;">
+                    <b>1. Uso del servicio</b><br>
+                    El servicio RehabBot está diseñado para acompañarte en tu proceso de rehabilitación. No sustituye la atención médica profesional.<br><br>
+                    <b>2. Privacidad</b><br>
+                    Tus datos personales y conversaciones están protegidos y solo se compartirán bajo tu consentimiento o en casos de emergencia SOS extrema.<br><br>
+                    <b>3. Servicio SOS</b><br>
+                    Al activar el botón SOS, consientes compartir tu ubicación GPS con las instituciones o contactos predeterminados. El mal uso intencional del sistema puede resultar en la cancelación de la cuenta.
+                </p>
+            </div>
+        </div>
+
+        <!-- ==========================================
+             SECCIÓN C: CHAT REHABBOT
+             ========================================== -->
+             
+        <!-- PANTALLA 15: CHAT -->
+        <div id="screen_chat" class="screen">
+            <div class="header-top" style="padding-bottom: 15px;">
+                <button class="icon-btn" onclick="navTo('screen_home_logged')"><i class="fa-solid fa-arrow-left"></i></button>
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <div style="width: 36px; height: 36px; background: white; border-radius: 50%; color: var(--c-primary); display: flex; justify-content: center; align-items: center;">
+                        <i class="fa-solid fa-robot"></i>
+                    </div>
+                    <div style="text-align: left;">
+                        <h2 style="font-size: 16px; line-height: 1;">RehabBot</h2>
+                        <span style="font-size: 11px; font-weight: 400;"><span style="color: #4CAF50;">●</span> En línea</span>
+                    </div>
+                </div>
+                <div style="width: 24px;"></div>
+            </div>
+            
+            <div class="chat-container">
+                <!-- Burbuja Bot -->
+                <div style="background-color: #FCE4EC; color: var(--c-text-main); align-self: flex-start; padding: 12px 16px; border-radius: 18px 18px 18px 0; max-width: 80%; font-size: 13px; line-height: 1.4; box-shadow: 0 1px 2px rgba(0,0,0,0.1);">
+                    Hola 👋 Soy RehabBot. Estoy aquí para apoyarte en tu proceso.
+                </div>
+                <!-- Burbuja Usuario -->
+                <div style="background-color: var(--c-primary); color: white; align-self: flex-end; padding: 12px 16px; border-radius: 18px 18px 0 18px; max-width: 80%; font-size: 13px; line-height: 1.4; box-shadow: 0 1px 2px rgba(0,0,0,0.1);">
+                    Hola, necesito ayuda para contactar a una clínica.
+                </div>
+                <!-- Typing Indicator -->
+                <div style="background-color: #E0E0E0; color: var(--c-text-main); align-self: flex-start; padding: 12px 16px; border-radius: 18px 18px 18px 0; font-size: 18px; letter-spacing: 2px;">
+                    <span style="color: #757575;">● ● ●</span>
+                </div>
+            </div>
+            
+            <div class="chat-input-wrapper">
+                <input type="text" class="chat-input" placeholder="Escribe un mensaje...">
+                <button class="chat-send"><i class="fa-solid fa-paper-plane"></i></button>
+            </div>
+        </div>
+
+        <!-- ==========================================
+             SECCIÓN D: MAPAS
+             ========================================== -->
+             
+        <!-- PANTALLAS 16-21: MAPAS -->
+        <div id="screen_map_1" class="screen">
+            <div class="header-top">
+                <button class="icon-btn" onclick="navTo('screen_home_logged')"><i class="fa-solid fa-arrow-left"></i></button>
+                <h2>Clínicas Cercanas</h2>
+                <div style="width: 24px;"></div>
+            </div>
+            <div style="position: relative; flex-grow: 1; margin-bottom: 80px;">
+                <!-- Barra Búsqueda Flotante -->
+                <div style="position: absolute; top: 16px; left: 16px; right: 16px; z-index: 10;">
+                    <div class="input-group" style="border: none; box-shadow: var(--shadow-card); height: 48px; border-radius: 24px;">
+                        <i class="fa-solid fa-magnifying-glass input-icon"></i>
+                        <input type="text" class="input-field" placeholder="Buscar clínica...">
+                    </div>
+                </div>
+                
+                <iframe src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d113032.64621394145!2d-88.02677815!3d15.5081198!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x8f66431969a5e123%3A0xc665123fc486ccf!2sSan%20Pedro%20Sula%2C%20Honduras!5e0!3m2!1ses-419!2sus!4v1718420000000!5m2!1ses-419!2sus" width="100%" height="100%" style="border:0;" allowfullscreen="" loading="lazy" referrerpolicy="no-referrer-when-downgrade"></iframe>
+            </div>
+
+            <!-- Bottom Nav Share -->
+            <nav class="bottom-nav">
+                <div class="nav-item nav-sos" onclick="openSOSModal()">
+                    <i class="fa-solid fa-triangle-exclamation"></i>
+                    <span>SOS</span>
+                </div>
+                <div class="nav-item" onclick="navTo('screen_home_logged')">
+                    <i class="fa-solid fa-house"></i>
+                    <span>Home</span>
+                </div>
+                <div class="nav-item" onclick="navTo('screen_chat')">
+                    <i class="fa-regular fa-comment"></i>
+                    <span>Chat</span>
+                </div>
+            </nav>
+        </div>
+
+        <!-- ==========================================
+             OVERLAYS GLOBALES (Menú y Modal SOS)
+             ========================================== -->
+
+        <!-- Drawer Menú Hamburguesa -->
+        <div id="drawer_overlay" class="drawer-overlay" onclick="closeMenu()">
+            <div id="drawer_panel" class="drawer-panel" onclick="event.stopPropagation()">
+                <div class="drawer-header">
+                    <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                        <div style="width: 60px; height: 60px; background: white; border-radius: 50%; color: var(--c-primary); display: flex; justify-content: center; align-items: center; font-size: 24px; margin-bottom: 16px;">
+                            <i class="fa-solid fa-user"></i>
+                        </div>
+                        <i class="fa-solid fa-xmark" style="font-size: 24px; cursor: pointer;" onclick="closeMenu()"></i>
+                    </div>
+                    <h2>Usuario</h2>
+                    <p style="font-size: 13px; opacity: 0.8;">usuario@correo.com</p>
+                </div>
+                <ul class="drawer-list">
+                    <li onclick="navTo('screen_profile'); closeMenu()"><i class="fa-solid fa-user-pen"></i> Mi Perfil</li>
+                    <li onclick="navTo('screen_map_1'); closeMenu()"><i class="fa-solid fa-location-dot"></i> Clínicas Cercanas</li>
+                    <li onclick="navTo('screen_add_sos_contact'); closeMenu()"><i class="fa-solid fa-phone"></i> Contactos SOS</li>
+                    <li onclick="navTo('screen_terms'); closeMenu()"><i class="fa-solid fa-file-contract"></i> Términos y Usos</li>
+                    <li onclick="navTo('screen_splash'); closeMenu()" style="color: var(--c-alert); margin-top: auto;"><i class="fa-solid fa-arrow-right-from-bracket" style="color: var(--c-alert);"></i> Cerrar Sesión</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- Modal SOS -->
+        <div id="modal_sos" class="modal-overlay">
+            <div class="modal-content modal-sos">
+                <h1 style="color: var(--c-alert); font-weight: 700; display: flex; justify-content: center; align-items: center; gap: 10px;">
+                    <i class="fa-solid fa-triangle-exclamation"></i> ALERTA <i class="fa-solid fa-triangle-exclamation"></i>
+                </h1>
+                
+                <button class="sos-pulse-btn">
+                    <i class="fa-solid fa-phone-volume"></i>
+                </button>
+                
+                <h2 style="color: var(--c-alert); font-weight: 700; font-size: 16px; margin-bottom: 40px;">LLAMANDO A INSTITUCIONES CERCANAS Y 911</h2>
+                
+                <button class="btn btn-outline" style="border-color: var(--c-alert); color: var(--c-alert);" onclick="closeSOSModal()">Cancelar Alerta</button>
+            </div>
+        </div>
+
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
