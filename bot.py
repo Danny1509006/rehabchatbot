@@ -1,96 +1,141 @@
 import os
 import requests
+import logging
+import json
+from pathlib import Path
+
 from fastapi import FastAPI, Request, HTTPException
-from langchain_community.document_loaders import DirectoryLoader, TextLoader
-from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_community.embeddings import HuggingFaceEmbeddings
-from langchain_community.vectorstores import Chroma
-from langchain_community.llms import Ollama
-from langchain.chains import create_retrieval_chain
-from langchain.chains.combine_documents import create_stuff_documents_chain
-from langchain_core.prompts import ChatPromptTemplate
 
 
-#  RUTAS Y TOKENS
+# =========================
+# CONFIGURACIÓN
+# =========================
 
-OBSIDIAN_PATH = "C:\\Users\\marro\\OneDrive\\Escritorio\\rehabchatbot"
-META_VERIFY_TOKEN = "chatbot2026" # Token de meta
-META_ACCESS_TOKEN = "EAAd7yORw2l8BR7gLxRkVg0iZAMTPKPOfI99NGnLgcRazLUh6ZBcFbt3p4nPxUR4pvCcbpa2PlDol8TsdXFjg32SptHXXakGP9iYCbO9sJ94pCeXS1qbZCVZAmDbzMiDI7t2VZAzQu5JGbilDQzyuEBq2MkBnhnFGZAc7ahGhgqKKB5kYZCk4ZAxtuuBJQU1R7B5Jz7MW9Rm0uzh7D2muG7lCCxC93LQxfaSId65MrC1iBmKRU1K8CIcjowzoZAlXq8KC3HEJvT8eeNBZAA76FkJTuD" # Token de acceso de Meta para enviar mensajes
+OBSIDIAN_PATH = r"C:\Users\marro\OneDrive\Escritorio\rehabchatbot"
+
+META_VERIFY_TOKEN = "chatbot2026"
+META_ACCESS_TOKEN = "EAAd7yORw2l8BR7gLxRkVg0iZAMTPKPOfI99NGnLgcRazLUh6ZBcFbt3p4nPxUR4pvCcbpa2PlDol8TsdXFjg32SptHXXakGP9iYCbO9sJ94pCeXS1qbZCVZAmDbzMiDI7t2VZAzQu5JGbilDQzyuEBq2MkBnhnFGZAc7ahGhgqKKB5kYZCk4ZAxtuuBJQU1R7B5Jz7MW9Rm0uzh7D2muG7lCCxC93LQxfaSId65MrC1iBmKRU1K8CIcjowzoZAlXq8KC3HEJvT8eeNBZAA76FkJTuD"
 PHONE_NUMBER_ID = "1073171329222891"
-OLLAMA_MODEL = "qwen2.5:3b" # Modelo de Ollama a usar
+GRAPH_VERSION = "v21.0"
 
-# Inicializar FastAPI
-app = FastAPI(title="API Chatbot TCC")
+OLLAMA_MODEL = "qwen2.5:3b"
 
-import os
+app = FastAPI(title="Chatbot WhatsApp + RAG")
 
-print("Ruta:", OBSIDIAN_PATH)
-print("Existe:", os.path.exists(OBSIDIAN_PATH))
+logging.basicConfig(level=logging.INFO)
 
-# 1. MOTOR RAG (OBSIDIAN -> OLLAMA)
+# =========================
+# RAG SIMPLIFICADO (SIN LANGCHAIN CHAINS)
+# =========================
 
-print("Cargando notas de Obsidian...")
-# Cargar solo los archivos Markdown de Obsidian
-loader = DirectoryLoader(
-    OBSIDIAN_PATH,
-    glob="**/*.md",
-    loader_cls=TextLoader
-)
-documentos = loader.load()
-print(f"Documentos cargados: {len(documentos)}")
+def cargar_documentos_obsidian():
+    """Cargar documentos de Obsidian de forma simple"""
+    docs = []
+    obsidian_path = Path(OBSIDIAN_PATH)
+    
+    if not obsidian_path.exists():
+        logging.warning(f"Obsidian path no encontrado: {OBSIDIAN_PATH}")
+        return ""
+    
+    for md_file in obsidian_path.rglob("*.md"):
+        try:
+            with open(md_file, 'r', encoding='utf-8') as f:
+                content = f.read()
+                docs.append(content)
+        except Exception as e:
+            logging.error(f"Error leyendo {md_file}: {e}")
+    
+    # Limitar a 3 documentos para respuestas más rápidas
+    context = "\n\n---\n\n".join(docs[:3])
+    logging.info(f"Documentos Obsidian cargados: {len(docs)} archivos (usando 3)")
+    return context
 
-# Cortar los textos en fragmentos procesables
-text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
-fragmentos = text_splitter.split_documents(documentos)
+# Cargar contexto al iniciar
+OBSIDIAN_CONTEXT = cargar_documentos_obsidian()
 
-# Crear la base de datos vectorial local (ChromaDB)
-embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
-vectorstore = Chroma.from_documents(fragmentos, embeddings)
-retriever = vectorstore.as_retriever(search_kwargs={"k": 3})
+def consultar_ollama(mensaje, contexto_obsidian=""):
+    """Consultar Ollama con contexto de Obsidian"""
+    url = "http://localhost:11434/api/generate"
+    
+    if contexto_obsidian:
+        prompt = f"""Eres un asistente terapéutico basado en TCC para rehabilitación de adicciones.
+        
+Contexto de referencia:
+{contexto_obsidian}
 
-# Conectar a Ollama local
-llm = Ollama(model=OLLAMA_MODEL, base_url="http://localhost:11434")
+Pregunta del usuario:
+{mensaje}
 
-# Crear el Prompt del Sistema
-system_prompt = (
-    "Eres un terapeuta asistente especializado en TCC para rehabilitación de adicciones. "
-    "Usa el siguiente contexto recuperado de la base de conocimientos para responder al usuario. "
-    "Si no sabes la respuesta o es una crisis, activa el protocolo de emergencia.\n\n"
-    "Contexto:\n{context}"
-)
-prompt = ChatPromptTemplate.from_messages([
-    ("system", system_prompt),
-    ("human", "{input}"),
-])
+Responde de forma clara y empática."""
+    else:
+        prompt = f"""Eres un asistente terapéutico basado en TCC para rehabilitación de adicciones.
 
-# Ensamblar la cadena de procesamiento
-question_answer_chain = create_stuff_documents_chain(llm, prompt)
-rag_chain = create_retrieval_chain(retriever, question_answer_chain)
+Pregunta del usuario:
+{mensaje}
+
+Responde de forma clara y empática."""
+    
+    try:
+        logging.info(f"[Ollama] Consultando con mensaje: {mensaje[:50]}...")
+        response = requests.post(url, json={
+            "model": OLLAMA_MODEL,
+            "prompt": prompt,
+            "stream": False,
+            "temperature": 0.7,
+        }, timeout=120)  # 120 segundos para dar tiempo suficiente
+        
+        if response.status_code == 200:
+            resultado = response.json()
+            respuesta = resultado.get("response", "No pude generar respuesta").strip()
+            logging.info(f"[Ollama] Respuesta: {respuesta[:100]}...")
+            return respuesta
+        else:
+            logging.error(f"[Ollama] Error {response.status_code}: {response.text}")
+            return None
+    except Exception as e:
+        logging.error(f"[Ollama] Error: {e}")
+        return None
 
 
-# 2. FUNCIONES DE WHATSAPP (META API)
 
-def enviar_mensaje_whatsapp(telefono_destino, texto):
-    """Envía la respuesta generada por Ollama de vuelta a WhatsApp"""
-    url = f"https://graph.facebook.com/v18.0/{PHONE_NUMBER_ID}/messages"
+# =========================
+# WHATSAPP API (META)
+# =========================
+
+def enviar_mensaje_whatsapp(numero, texto):
+    url = f"https://graph.facebook.com/{GRAPH_VERSION}/{PHONE_NUMBER_ID}/messages"
+
     headers = {
         "Authorization": f"Bearer {META_ACCESS_TOKEN}",
         "Content-Type": "application/json"
     }
-    data = {
+
+    payload = {
         "messaging_product": "whatsapp",
-        "to": telefono_destino,
+        "to": numero,
         "type": "text",
         "text": {"body": texto}
     }
-    respuesta = requests.post(url, headers=headers, json=data)
-    return respuesta.json()
+
+    try:
+        response = requests.post(url, headers=headers, json=payload)
+
+        logging.info(f"STATUS META: {response.status_code}")
+        logging.info(f"RESPONSE META: {response.text}")
+
+        return response.json()
+
+    except Exception as e:
+        logging.error(f"ERROR EN META API: {str(e)}")
+        return {"error": str(e)}
 
 
-# 3. ENDPOINTS DE FASTAPI (WEBHOOK)
+# =========================
+# WEBHOOK VERIFICACIÓN
+# =========================
 
 @app.get("/webhook")
-async def verificar_webhook(request: Request):
+async def verify_webhook(request: Request):
     mode = request.query_params.get("hub.mode")
     token = request.query_params.get("hub.verify_token")
     challenge = request.query_params.get("hub.challenge")
@@ -99,41 +144,83 @@ async def verificar_webhook(request: Request):
     print("TOKEN RECIBIDO:", token)
     print("TOKEN ESPERADO:", META_VERIFY_TOKEN)
 
-    if mode == "subscribe" and token == META_VERIFY_TOKEN:
-        return int(challenge)
+    #  FIX IMPORTANTE: strip() evita errores tontos de espacios
+    if mode == "subscribe" and token and token.strip() == META_VERIFY_TOKEN:
+        print("WEBHOOK VERIFICADO ✔")
+        from fastapi.responses import Response
+        return Response(content=challenge, media_type="text/plain")
 
-    raise HTTPException(status_code=403, detail="Token de verificación inválido")
+    raise HTTPException(status_code=403, detail="Token inválido")
+
+
+# =========================
+# WEBHOOK PRINCIPAL
+# =========================
 @app.post("/webhook")
 async def recibir_mensaje(request: Request):
-    """Meta hace un POST aquí cada vez que alguien escribe en WhatsApp"""
     body = await request.json()
 
+    print("=" * 60)
+    print("📨 POST WEBHOOK RECIBIDO")
+    print("=" * 60)
+    print("BODY COMPLETO:", json.dumps(body, indent=2))
+
     try:
-        # Extraer los datos del JSON que manda Meta
         entry = body.get("entry", [])[0]
         changes = entry.get("changes", [])[0]
         value = changes.get("value", {})
+
         messages = value.get("messages", [])
 
-        if messages:
-            mensaje = messages[0]
-            numero_remitente = mensaje.get("from")
-            texto_usuario = mensaje.get("text", {}).get("body")
+        if not messages:
+            print("⚠️  No hay mensajes en el webhook")
+            return {"status": "no message"}
 
-            print(f"Mensaje recibido de {numero_remitente}: {texto_usuario}")
+        msg = messages[0]
 
-            # 1. Consultar a Ollama + Obsidian
-            respuesta_ollama = rag_chain.invoke({"input": texto_usuario})
-            texto_respuesta = respuesta_ollama["answer"]
+        from_number = msg.get("from")
+        text = msg.get("text", {}).get("body", "")
 
-            print(f"Respuesta generada por Ollama: {texto_respuesta}")
+        logging.info(f"📱 From: {from_number} | Text: {text}")
+        print(f"📱 From: {from_number}")
+        print(f"📝 Text: {text}")
 
-            # 2. Enviar respuesta por WhatsApp
-            enviar_mensaje_whatsapp(numero_remitente, texto_respuesta)
+        if not from_number:
+            print("❌ No hay número de remitente")
+            return {"status": "no sender"}
 
-        return {"status": "success"}
+        if not text:
+            print("⚠️  Mensaje vacío")
+            enviar_mensaje_whatsapp(from_number, "No entendí tu mensaje.")
+            return {"status": "empty message"}
+
+        # =========================
+        # CONSULTAR OLLAMA
+        # =========================
+        print("\n🤖 Consultando Ollama...")
+        answer = consultar_ollama(text, OBSIDIAN_CONTEXT)
+
+        if not answer:
+            answer = "Lo siento, no pude procesar tu mensaje en este momento. Intenta de nuevo."
+            print("❌ Ollama no respondió")
+
+        logging.info(f"✅ ANSWER: {answer}")
+        print(f"✅ RESPUESTA: {answer}")
+
+        # =========================
+        # ENVIAR A WHATSAPP
+        # =========================
+        print("\n📤 Enviando a WhatsApp...")
+        send_result = enviar_mensaje_whatsapp(from_number, answer)
+        logging.info(f"SENT RESULT: {send_result}")
+        print(f"📤 Resultado envío: {send_result}")
+
+        print("=" * 60)
+        return {"status": "ok"}
 
     except Exception as e:
-        print(f"Error procesando mensaje: {e}")
-        return {"status": "error"}
-    
+        logging.error(f"❌ WEBHOOK ERROR: {str(e)}")
+        print(f"❌ ERROR: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return {"status": "error", "error": str(e)}
