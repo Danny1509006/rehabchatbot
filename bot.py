@@ -2,9 +2,16 @@ import os
 import requests
 import logging
 import json
+import datetime
 from pathlib import Path
 from dotenv import load_dotenv
-from fastapi import FastAPI, Request, HTTPException
+from fastapi import FastAPI, Request, HTTPException, Depends
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
+from sqlalchemy import create_engine, Column, Integer, String, Text, DateTime, ForeignKey, text
+from sqlalchemy.orm import declarative_base, sessionmaker, relationship, Session
+import hashlib
+import secrets
 
 # Cargar variables de entorno del archivo .env
 load_dotenv()
@@ -13,21 +20,152 @@ load_dotenv()
 # CONFIGURACIÓN
 # =========================
 
-# Cargar configuración desde variables de entorno con valores por defecto
 BASE_DIR = Path(__file__).parent.resolve()
 OBSIDIAN_PATH = os.environ.get("OBSIDIAN_PATH", str(BASE_DIR / "obsidian_vault"))
-
-META_VERIFY_TOKEN = os.environ.get("META_VERIFY_TOKEN", "chatbot2026")
-META_ACCESS_TOKEN = os.environ.get("META_ACCESS_TOKEN", "EAAd7yORw2l8BR7VByI0unyhvmj4Jrjt9ABJBX7K6L1mhLSFainntzaAmhlsiyUUzVG6m6iqCqJGrIdin4Gms0ZAYJj2qq5WunyTpb7D6k1IWpgYoW4QOjWbzNUsxX4ZCNpEoLOZCZBEMEZBfMqf6B77fS0R8MxZBwOiCXsvIu2z2cVBJdtZAjAuijhsJCWoZAugRYgXwo1seWGVdVMJ6ZAyZBDPu2ZCOyXmeCpMekBm1XopqEWZCrZAh9bT4fhO3JtZBPxZCppJLrCZCVMxipzsZC7dJ5vOgo")
-PHONE_NUMBER_ID = os.environ.get("PHONE_NUMBER_ID", "1073171329222891")
-GRAPH_VERSION = os.environ.get("GRAPH_VERSION", "v21.0")
-
 OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "llama3:latest")
+DATABASE_URL = os.environ.get("DATABASE_URL", "sqlite:///rehabchatbot.db")
 
-app = FastAPI(title="Chatbot WhatsApp + RAG")
+logging.basicConfig(level=logging.INFO)
 
-# Configurar cabeceras de CORS para permitir peticiones desde la UI web (Chatbot/index.html)
-from fastapi.middleware.cors import CORSMiddleware
+# =========================
+# CONFIGURACIÓN DE BASE DE DATOS (SQLAlchemy)
+# =========================
+
+# Crear la base de datos automáticamente si es MySQL
+if DATABASE_URL.startswith("mysql"):
+    import urllib.parse
+    try:
+        parsed = urllib.parse.urlparse(DATABASE_URL)
+        server_url = f"{parsed.scheme}://{parsed.netloc}"
+        temp_engine = create_engine(server_url)
+        with temp_engine.connect().execution_options(isolation_level="AUTOCOMMIT") as conn:
+            db_name = parsed.path.lstrip("/")
+            conn.execute(text(f"CREATE DATABASE IF NOT EXISTS {db_name} CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"))
+            logging.info(f"Base de datos '{db_name}' verificada/creada exitosamente en MySQL.")
+        temp_engine.dispose()
+    except Exception as e:
+        logging.error(f"Error al verificar/crear la base de datos en MySQL: {e}")
+
+engine = create_engine(
+    DATABASE_URL, 
+    connect_args={"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {}
+)
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+Base = declarative_base()
+
+# Funciones de hashing nativas con PBKDF2 HMAC SHA-256 (sin dependencias con bugs)
+def hash_password(password: str) -> str:
+    salt = secrets.token_hex(16)
+    pwd_bytes = password.encode('utf-8')
+    salt_bytes = salt.encode('utf-8')
+    db_hash = hashlib.pbkdf2_hmac('sha256', pwd_bytes, salt_bytes, 100000)
+    return f"{salt}:{db_hash.hex()}"
+
+def verify_password(password: str, hashed_password: str) -> bool:
+    try:
+        salt, db_hash = hashed_password.split(':')
+        pwd_bytes = password.encode('utf-8')
+        salt_bytes = salt.encode('utf-8')
+        test_hash = hashlib.pbkdf2_hmac('sha256', pwd_bytes, salt_bytes, 100000)
+        return secrets.compare_digest(test_hash.hex(), db_hash)
+    except Exception:
+        return False
+
+# Dependency para obtener sesión de DB
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+# =========================
+# MODELOS DE BASE DE DATOS
+# =========================
+
+class User(Base):
+    __tablename__ = "users"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(100), nullable=False)
+    lastname = Column(String(100), nullable=False)
+    email = Column(String(100), unique=True, index=True, nullable=False)
+    password_hash = Column(String(200), nullable=False)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    
+    mood_logs = relationship("MoodLog", back_populates="user", cascade="all, delete-orphan")
+    sos_contacts = relationship("SOSContact", back_populates="user", cascade="all, delete-orphan")
+    chat_messages = relationship("ChatMessage", back_populates="user", cascade="all, delete-orphan")
+
+class MoodLog(Base):
+    __tablename__ = "mood_logs"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    mood_emoji = Column(String(10), nullable=False)
+    timestamp = Column(DateTime, default=datetime.datetime.utcnow)
+    
+    user = relationship("User", back_populates="mood_logs")
+
+class SOSContact(Base):
+    __tablename__ = "sos_contacts"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    name = Column(String(100), nullable=False)
+    phone = Column(String(50), nullable=False)
+    relationship_type = Column(String(100))
+    
+    user = relationship("User", back_populates="sos_contacts")
+
+class ChatMessage(Base):
+    __tablename__ = "chat_messages"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    sender = Column(String(20), nullable=False)  # 'user' o 'bot'
+    message_text = Column(Text, nullable=False)
+    timestamp = Column(DateTime, default=datetime.datetime.utcnow)
+    
+    user = relationship("User", back_populates="chat_messages")
+
+# Crear tablas
+Base.metadata.create_all(bind=engine)
+
+# =========================
+# MODELOS PYDANTIC (VALIDACIÓN)
+# =========================
+
+class RegisterRequest(BaseModel):
+    name: str
+    lastname: str
+    email: str
+    password: str
+
+class LoginRequest(BaseModel):
+    email: str
+    password: str
+
+class ChatRequest(BaseModel):
+    user_id: int
+    message: str
+
+class SOSContactRequest(BaseModel):
+    user_id: int
+    name: str
+    phone: str
+    relationship: str = None
+
+class MoodRequest(BaseModel):
+    user_id: int
+    mood_emoji: str
+
+# =========================
+# CONFIGURACIÓN FASTAPI
+# =========================
+
+app = FastAPI(title="RehabBot Web API Backend")
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -36,10 +174,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-logging.basicConfig(level=logging.INFO)
-
 # =========================
-# RAG SIMPLIFICADO (SIN LANGCHAIN CHAINS)
+# RAG SIMPLIFICADO
 # =========================
 
 def cargar_documentos_obsidian():
@@ -59,13 +195,9 @@ def cargar_documentos_obsidian():
         except Exception as e:
             logging.error(f"Error leyendo {md_file}: {e}")
     
-    # Limitar a 3 documentos para respuestas más rápidas
     context = "\n\n---\n\n".join(docs[:3])
     logging.info(f"Documentos Obsidian cargados: {len(docs)} archivos (usando 3)")
     return context
-
-# Cargar contexto al iniciar
-OBSIDIAN_CONTEXT = cargar_documentos_obsidian()
 
 def consultar_ollama(mensaje, contexto_obsidian=""):
     """Consultar Ollama con contexto de Obsidian"""
@@ -96,7 +228,7 @@ Responde de forma clara y empática."""
             "prompt": prompt,
             "stream": False,
             "temperature": 0.7,
-        }, timeout=120)  # 120 segundos para dar tiempo suficiente
+        }, timeout=120)
         
         if response.status_code == 200:
             resultado = response.json()
@@ -110,159 +242,178 @@ Responde de forma clara y empática."""
         logging.error(f"[Ollama] Error: {e}")
         return None
 
-
-
 # =========================
-# WHATSAPP API (META)
+# ENDPOINTS API DE AUTENTICACIÓN
 # =========================
 
-def enviar_mensaje_whatsapp(numero, texto):
-    url = f"https://graph.facebook.com/{GRAPH_VERSION}/{PHONE_NUMBER_ID}/messages"
-
-    headers = {
-        "Authorization": f"Bearer {META_ACCESS_TOKEN}",
-        "Content-Type": "application/json"
+@app.post("/api/register")
+def register(req: RegisterRequest, db: Session = Depends(get_db)):
+    # Validar si el usuario ya existe
+    existing_user = db.query(User).filter(User.email == req.email.strip().lower()).first()
+    if existing_user:
+        raise HTTPException(status_code=400, detail="El correo ya se encuentra registrado.")
+    
+    # Crear nuevo usuario
+    new_user = User(
+        name=req.name.strip(),
+        lastname=req.lastname.strip(),
+        email=req.email.strip().lower(),
+        password_hash=hash_password(req.password)
+    )
+    db.add(new_user)
+    db.commit()
+    db.refresh(new_user)
+    
+    return {
+        "status": "success",
+        "message": "Usuario registrado exitosamente",
+        "user": {
+            "id": new_user.id,
+            "name": new_user.name,
+            "lastname": new_user.lastname,
+            "email": new_user.email
+        }
     }
 
-    payload = {
-        "messaging_product": "whatsapp",
-        "to": numero,
-        "type": "text",
-        "text": {"body": texto}
+@app.post("/api/login")
+def login(req: LoginRequest, db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.email == req.email.strip().lower()).first()
+    if not user or not verify_password(req.password, user.password_hash):
+        raise HTTPException(status_code=401, detail="Correo o contraseña incorrectos.")
+    
+    return {
+        "status": "success",
+        "message": "Inicio de sesión exitoso",
+        "user": {
+            "id": user.id,
+            "name": user.name,
+            "lastname": user.lastname,
+            "email": user.email
+        }
     }
 
-    try:
-        response = requests.post(url, headers=headers, json=payload)
-
-        logging.info(f"STATUS META: {response.status_code}")
-        logging.info(f"RESPONSE META: {response.text}")
-
-        return response.json()
-
-    except Exception as e:
-        logging.error(f"ERROR EN META API: {str(e)}")
-        return {"error": str(e)}
-
-
 # =========================
-# ENDPOINT PARA CHAT WEB
+# ENDPOINTS API DEL CHAT
 # =========================
+
+@app.get("/api/chat/history")
+def get_chat_history(user_id: int, db: Session = Depends(get_db)):
+    messages = db.query(ChatMessage).filter(ChatMessage.user_id == user_id).order_by(ChatMessage.timestamp.asc()).all()
+    return [
+        {
+            "sender": msg.sender,
+            "message_text": msg.message_text,
+            "timestamp": msg.timestamp.isoformat()
+        }
+        for msg in messages
+    ]
 
 @app.post("/api/chat")
-async def chat_web(request: Request):
-    try:
-        body = await request.json()
-        mensaje = body.get("message")
-        if not mensaje:
-            raise HTTPException(status_code=400, detail="Falta el campo 'message'")
+def chat_web(req: ChatRequest, db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.id == req.user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado.")
         
-        # Consultar Ollama usando el contexto de Obsidian
-        # Recargamos dinámicamente el contexto para pruebas locales más cómodas
-        contexto = cargar_documentos_obsidian()
-        respuesta = consultar_ollama(mensaje, contexto)
+    # 1. Guardar mensaje del usuario en la base de datos
+    user_msg = ChatMessage(
+        user_id=req.user_id,
+        sender="user",
+        message_text=req.message
+    )
+    db.add(user_msg)
+    
+    # 2. Cargar contexto RAG y consultar Ollama
+    contexto = cargar_documentos_obsidian()
+    respuesta = consultar_ollama(req.message, contexto)
+    
+    if not respuesta:
+        respuesta = "Lo siento, no pude procesar tu mensaje en este momento."
         
-        if not respuesta:
-            respuesta = "Lo siento, no pude procesar tu mensaje en este momento."
-            
-        return {"response": respuesta}
-    except Exception as e:
-        logging.error(f"Error en chat local: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-# =========================
-# WEBHOOK VERIFICACIÓN
-# =========================
-
-@app.get("/webhook")
-async def verify_webhook(request: Request):
-    mode = request.query_params.get("hub.mode")
-    token = request.query_params.get("hub.verify_token")
-    challenge = request.query_params.get("hub.challenge")
-
-    print("MODE:", mode)
-    print("TOKEN RECIBIDO:", token)
-    print("TOKEN ESPERADO:", META_VERIFY_TOKEN)
-
-    #  FIX IMPORTANTE: strip() evita errores tontos de espacios
-    if mode == "subscribe" and token and token.strip() == META_VERIFY_TOKEN:
-        print("WEBHOOK VERIFICADO ✔")
-        from fastapi.responses import Response
-        return Response(content=challenge, media_type="text/plain")
-
-    raise HTTPException(status_code=403, detail="Token inválido")
-
+    # 3. Guardar respuesta del bot en la base de datos
+    bot_msg = ChatMessage(
+        user_id=req.user_id,
+        sender="bot",
+        message_text=respuesta
+    )
+    db.add(bot_msg)
+    
+    db.commit()
+    
+    return {"response": respuesta}
 
 # =========================
-# WEBHOOK PRINCIPAL
+# ENDPOINTS API CONTACTOS SOS
 # =========================
-@app.post("/webhook")
-async def recibir_mensaje(request: Request):
-    body = await request.json()
 
-    print("=" * 60)
-    print("📨 POST WEBHOOK RECIBIDO")
-    print("=" * 60)
-    print("BODY COMPLETO:", json.dumps(body, indent=2))
+@app.get("/api/sos-contacts")
+def get_sos_contacts(user_id: int, db: Session = Depends(get_db)):
+    contacts = db.query(SOSContact).filter(SOSContact.user_id == user_id).all()
+    return [
+        {
+            "id": c.id,
+            "name": c.name,
+            "phone": c.phone,
+            "relationship": c.relationship_type
+        }
+        for c in contacts
+    ]
 
-    try:
-        entry = body.get("entry", [])[0]
-        changes = entry.get("changes", [])[0]
-        value = changes.get("value", {})
+@app.post("/api/sos-contacts")
+def add_sos_contact(req: SOSContactRequest, db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.id == req.user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado.")
+        
+    new_contact = SOSContact(
+        user_id=req.user_id,
+        name=req.name.strip(),
+        phone=req.phone.strip(),
+        relationship_type=req.relationship.strip() if req.relationship else None
+    )
+    db.add(new_contact)
+    db.commit()
+    db.refresh(new_contact)
+    
+    return {
+        "id": new_contact.id,
+        "name": new_contact.name,
+        "phone": new_contact.phone,
+        "relationship": new_contact.relationship_type
+    }
 
-        messages = value.get("messages", [])
+# =========================
+# ENDPOINTS API ESTADOS DE ÁNIMO
+# =========================
 
-        if not messages:
-            print("⚠️  No hay mensajes en el webhook")
-            return {"status": "no message"}
+@app.get("/api/moods")
+def get_moods(user_id: int, db: Session = Depends(get_db)):
+    logs = db.query(MoodLog).filter(MoodLog.user_id == user_id).order_by(MoodLog.timestamp.desc()).all()
+    return [
+        {
+            "id": log.id,
+            "mood_emoji": log.mood_emoji,
+            "timestamp": log.timestamp.isoformat()
+        }
+        for log in logs
+    ]
 
-        msg = messages[0]
-
-        from_number = msg.get("from")
-        text = msg.get("text", {}).get("body", "")
-
-        logging.info(f"📱 From: {from_number} | Text: {text}")
-        print(f"📱 From: {from_number}")
-        print(f"📝 Text: {text}")
-
-        if not from_number:
-            print("❌ No hay número de remitente")
-            return {"status": "no sender"}
-
-        if not text:
-            print("⚠️  Mensaje vacío")
-            enviar_mensaje_whatsapp(from_number, "No entendí tu mensaje.")
-            return {"status": "empty message"}
-
-        # =========================
-        # CONSULTAR OLLAMA
-        # =========================
-        print("\n🤖 Consultando Ollama...")
-        # Cargar contexto de forma dinámica para obtener las últimas notas de Obsidian
-        contexto_obsidian = cargar_documentos_obsidian()
-        answer = consultar_ollama(text, contexto_obsidian)
-
-        if not answer:
-            answer = "Lo siento, no pude procesar tu mensaje en este momento. Intenta de nuevo."
-            print("❌ Ollama no respondió")
-
-        logging.info(f"✅ ANSWER: {answer}")
-        print(f"✅ RESPUESTA: {answer}")
-
-        # =========================
-        # ENVIAR A WHATSAPP
-        # =========================
-        print("\n📤 Enviando a WhatsApp...")
-        send_result = enviar_mensaje_whatsapp(from_number, answer)
-        logging.info(f"SENT RESULT: {send_result}")
-        print(f"📤 Resultado envío: {send_result}")
-
-        print("=" * 60)
-        return {"status": "ok"}
-
-    except Exception as e:
-        logging.error(f"❌ WEBHOOK ERROR: {str(e)}")
-        print(f"❌ ERROR: {str(e)}")
-        import traceback
-        traceback.print_exc()
-        return {"status": "error", "error": str(e)}
+@app.post("/api/moods")
+def add_mood_log(req: MoodRequest, db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.id == req.user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado.")
+        
+    new_log = MoodLog(
+        user_id=req.user_id,
+        mood_emoji=req.mood_emoji
+    )
+    db.add(new_log)
+    db.commit()
+    db.refresh(new_log)
+    
+    return {
+        "status": "success",
+        "id": new_log.id,
+        "mood_emoji": new_log.mood_emoji,
+        "timestamp": new_log.timestamp.isoformat()
+    }
