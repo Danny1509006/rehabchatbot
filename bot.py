@@ -3,24 +3,38 @@ import requests
 import logging
 import json
 from pathlib import Path
-
+from dotenv import load_dotenv
 from fastapi import FastAPI, Request, HTTPException
 
+# Cargar variables de entorno del archivo .env
+load_dotenv()
 
 # =========================
 # CONFIGURACIÓN
 # =========================
 
-OBSIDIAN_PATH = r"C:\Users\marro\OneDrive\Escritorio\rehabchatbot"
+# Cargar configuración desde variables de entorno con valores por defecto
+BASE_DIR = Path(__file__).parent.resolve()
+OBSIDIAN_PATH = os.environ.get("OBSIDIAN_PATH", str(BASE_DIR / "obsidian_vault"))
 
-META_VERIFY_TOKEN = "chatbot2026"
-META_ACCESS_TOKEN = "EAAd7yORw2l8BR7gLxRkVg0iZAMTPKPOfI99NGnLgcRazLUh6ZBcFbt3p4nPxUR4pvCcbpa2PlDol8TsdXFjg32SptHXXakGP9iYCbO9sJ94pCeXS1qbZCVZAmDbzMiDI7t2VZAzQu5JGbilDQzyuEBq2MkBnhnFGZAc7ahGhgqKKB5kYZCk4ZAxtuuBJQU1R7B5Jz7MW9Rm0uzh7D2muG7lCCxC93LQxfaSId65MrC1iBmKRU1K8CIcjowzoZAlXq8KC3HEJvT8eeNBZAA76FkJTuD"
-PHONE_NUMBER_ID = "1073171329222891"
-GRAPH_VERSION = "v21.0"
+META_VERIFY_TOKEN = os.environ.get("META_VERIFY_TOKEN", "chatbot2026")
+META_ACCESS_TOKEN = os.environ.get("META_ACCESS_TOKEN", "EAAd7yORw2l8BR7VByI0unyhvmj4Jrjt9ABJBX7K6L1mhLSFainntzaAmhlsiyUUzVG6m6iqCqJGrIdin4Gms0ZAYJj2qq5WunyTpb7D6k1IWpgYoW4QOjWbzNUsxX4ZCNpEoLOZCZBEMEZBfMqf6B77fS0R8MxZBwOiCXsvIu2z2cVBJdtZAjAuijhsJCWoZAugRYgXwo1seWGVdVMJ6ZAyZBDPu2ZCOyXmeCpMekBm1XopqEWZCrZAh9bT4fhO3JtZBPxZCppJLrCZCVMxipzsZC7dJ5vOgo")
+PHONE_NUMBER_ID = os.environ.get("PHONE_NUMBER_ID", "1073171329222891")
+GRAPH_VERSION = os.environ.get("GRAPH_VERSION", "v21.0")
 
-OLLAMA_MODEL = "qwen2.5:3b"
+OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "llama3:latest")
 
 app = FastAPI(title="Chatbot WhatsApp + RAG")
+
+# Configurar cabeceras de CORS para permitir peticiones desde la UI web (Chatbot/index.html)
+from fastapi.middleware.cors import CORSMiddleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 logging.basicConfig(level=logging.INFO)
 
@@ -131,6 +145,32 @@ def enviar_mensaje_whatsapp(numero, texto):
 
 
 # =========================
+# ENDPOINT PARA CHAT WEB
+# =========================
+
+@app.post("/api/chat")
+async def chat_web(request: Request):
+    try:
+        body = await request.json()
+        mensaje = body.get("message")
+        if not mensaje:
+            raise HTTPException(status_code=400, detail="Falta el campo 'message'")
+        
+        # Consultar Ollama usando el contexto de Obsidian
+        # Recargamos dinámicamente el contexto para pruebas locales más cómodas
+        contexto = cargar_documentos_obsidian()
+        respuesta = consultar_ollama(mensaje, contexto)
+        
+        if not respuesta:
+            respuesta = "Lo siento, no pude procesar tu mensaje en este momento."
+            
+        return {"response": respuesta}
+    except Exception as e:
+        logging.error(f"Error en chat local: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# =========================
 # WEBHOOK VERIFICACIÓN
 # =========================
 
@@ -198,7 +238,9 @@ async def recibir_mensaje(request: Request):
         # CONSULTAR OLLAMA
         # =========================
         print("\n🤖 Consultando Ollama...")
-        answer = consultar_ollama(text, OBSIDIAN_CONTEXT)
+        # Cargar contexto de forma dinámica para obtener las últimas notas de Obsidian
+        contexto_obsidian = cargar_documentos_obsidian()
+        answer = consultar_ollama(text, contexto_obsidian)
 
         if not answer:
             answer = "Lo siento, no pude procesar tu mensaje en este momento. Intenta de nuevo."
